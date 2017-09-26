@@ -12,9 +12,10 @@ def merge_articles(art):
   c += v['body'] + "\n"
  return c
 
+# Configure working directory
 current_folder = os.getcwd()
 lm_folder = current_folder + "/" + "models"
-
+# Retreive data from db on local
 articles = get_data()
 
 lm_c = MLM(merge_articles(articles))
