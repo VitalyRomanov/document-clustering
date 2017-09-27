@@ -1,5 +1,5 @@
 from data_reader import get_data
-from language_model import MLM,mlm_optimal_parameter
+from language_model import MLM,mlm_optimal_parameter,mlm_optimal_parameter_tf
 import pickle
 
 
