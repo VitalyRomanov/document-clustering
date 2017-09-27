@@ -121,7 +121,6 @@ def mlm_optimal_parameter_tf(lm_docs,lm_c):
         for i in range(1000):
             g = 0.;g_d = 0.
             for w in lm_c.lm:
-                print(w)
                 tf.assign(p_w_cs,lm_c.getProb(w)); pos = 0
                 for lm_doc in lm_docs.values():
                     c_w_da = lm_doc.lm[w]; d_ia = lm_doc.tc
