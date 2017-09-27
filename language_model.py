@@ -95,7 +95,7 @@ def mlm_optimal_parameter(lm_docs,lm_c):
 def mlm_optimal_parameter_tf(lm_docs,lm_c):
     v_size = len(lm_docs)
 
-    with tf.device("/gpu:1"):
+    with tf.device("/gpu:0"):
         d_is = tf.placeholder(tf.float32,shape=(v_size,1))
         c_w_ds = tf.placeholder(tf.float32,shape=(v_size,1))
         p_w_cs = tf.Variable(0,0,dtype=tf.float32)
