@@ -95,26 +95,26 @@ def mlm_optimal_parameter(lm_docs,lm_c):
 def mlm_optimal_parameter_tf(lm_docs,lm_c):
     v_size = len(lm_docs)
 
-    with tf.device("/gpu:0"):
-        d_is = tf.placeholder(tf.float32,shape=(v_size,1))
-        c_w_ds = tf.placeholder(tf.float32,shape=(v_size,1))
-        p_w_cs = tf.Variable(0,0,dtype=tf.float32)
-        mu = tf.Variable(1.01,dtype=tf.float32)
+    # with tf.device("/gpu:0"):
+    d_is = tf.placeholder(tf.float32,shape=(v_size,1))
+    c_w_ds = tf.placeholder(tf.float32,shape=(v_size,1))
+    p_w_cs = tf.Variable(0,0,dtype=tf.float32)
+    mu = tf.Variable(1.01,dtype=tf.float32)
 
-        g_mu_num = tf.multiply(c_w_ds,((d_is - 1)*p_w_cs - c_w_ds + 1))
-        g_mu_den = tf.multiply( d_is - 1 + mu, c_w_ds - 1 + p_w_cs*mu)
-        g_mu = tf.reduce_sum(tf.div(g_mu_num,g_mu_den))
+    g_mu_num = tf.multiply(c_w_ds,((d_is - 1)*p_w_cs - c_w_ds + 1))
+    g_mu_den = tf.multiply( d_is - 1 + mu, c_w_ds - 1 + p_w_cs*mu)
+    g_mu = tf.reduce_sum(tf.div(g_mu_num,g_mu_den))
 
-        g_mu_d_num = -tf.multiply(c_w_ds,tf.square((d_is - 1)*p_w_cs - c_w_ds + 1))
-        g_mu_d_den = tf.multiply( tf.square(d_is - 1 + mu), tf.square(c_w_ds - 1 + p_w_cs*mu))
-        g_mu_d = tf.reduce_sum(tf.div(g_mu_d_num,g_mu_d_den))
+    g_mu_d_num = -tf.multiply(c_w_ds,tf.square((d_is - 1)*p_w_cs - c_w_ds + 1))
+    g_mu_d_den = tf.multiply( tf.square(d_is - 1 + mu), tf.square(c_w_ds - 1 + p_w_cs*mu))
+    g_mu_d = tf.reduce_sum(tf.div(g_mu_d_num,g_mu_d_den))
 
-        init = tf.global_variables_initializer()
+    init = tf.global_variables_initializer()
 
     d_i = np.zeros([v_size,1],dtype=np.float32)
     c_w_d = np.zeros([v_size,1],dtype=np.float32)
 
-    with tf.Session() as sess:
+    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         print("Start computation")
         sess.run(init)
         for i in range(1000):
