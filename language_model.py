@@ -3,6 +3,7 @@ from tokenization import get_document_words
 import pickle
 from pymystem3 import Mystem
 import numpy as np
+import tensorflow as tf
 
 def multimomial_lm(doc):
 
@@ -31,7 +32,7 @@ class MLM:
         for token,count in self.lm.items():
             lemma = m.lemmatize(token)[0]
             if lemma in lm:
-                lm[lemma] += count
+                lm[lemma] += count;
             else:
                 lm[lemma] = count
         self.lm = lm
@@ -90,3 +91,44 @@ def mlm_optimal_parameter(lm_docs,lm_c):
         # print("Iteration %d : %f"%(i,mu))
 
     return mu
+
+def mlm_optimal_parameter_tf(lm_docs,lm_c):
+    v_size = len(lm_docs)
+    d_is = tf.placeholder(tf.float32,shape=(v_size,1))
+    c_w_ds = tf.placeholder(tf.float32,shape=(v_size,1))
+    p_w_cs = tf.Variable(0,0,dtype=tf.float32)
+    mu = tf.Variable(1.01,dtype=tf.float32)
+
+
+    g_mu_num = tf.multiply(c_w_ds,((d_is - 1)*p_w_cs - c_w_ds + 1))
+    g_mu_den = tf.multiply( d_is - 1 + mu, c_w_ds - 1 + p_w_cs*mu)
+    g_mu = tf.reduce_sum(tf.div(g_mu_num,g_mu_den))
+
+    g_mu_d_num = -tf.multiply(c_w_ds,tf.square((d_is - 1)*p_w_cs - c_w_ds + 1))
+    g_mu_d_den = tf.multiply( tf.square(d_is - 1 + mu), tf.square(c_w_ds - 1 + p_w_cs*mu))
+    g_mu_d = tf.reduce_sum(tf.div(g_mu_d_num,g_mu_d_den))
+
+    # mu_update = mu - g_mu/g_mu_d
+
+    init = tf.global_variables_initializer()
+
+    d_i = np.zeros([v_size,1],dtype=np.float32)
+    c_w_d = np.zeros([v_size,1],dtype=np.float32)
+
+    with tf.Session() as sess:
+        sess.run(init)
+        g = 0.;g_d = 0.
+        for i in range(1000):
+            for w in lm_c.lm:
+                tf.assign(p_w_cs,lm_c.getProb(w)); pos = 0
+                for lm_doc in lm_docs.values():
+                    c_w_da = lm_doc.lm[w]; d_ia = lm_doc.tc
+                    d_i[pos,0] = d_ia;# p_w_cs[pos,1] = p_w_c;
+                    c_w_d[pos,0] = c_w_da
+                    pos += 1
+                g_add,g_d_add = sess.run([g_mu,g_mu_d],{d_is:d_i,c_w_ds:c_w_d})
+                g += g_add; g_d += g_d_add
+            tf.assign(mu,mu-g/g_d)
+            print("Iteration %d : "%i,sess.run(mu))
+        mu_final = sess.run(mu)
+    return mu_final

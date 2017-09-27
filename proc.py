@@ -12,7 +12,6 @@ def merge_articles(art):
   c += v['body'] + "\n"
  return c
 
-# comment
 
 current_folder = os.getcwd()
 lm_folder = current_folder + "/" + "models"
@@ -21,7 +20,7 @@ articles = get_data()
 
 print("Collection LM")
 lm_c = MLM(merge_articles(articles))
-# lm_c.store(lm_folder + "/" + "lm_c.lm")
+# lm_c.store(lm_folder + "/" + "lm_c.lm")``
 
 print("Documents' LM")
 lm_articles = {}
@@ -32,7 +31,7 @@ for a_id,content in articles.items():
 #  pickle.dump(lm_articles,lm_art)
 
 print("Calculating optimal parameter")
-mu = mlm_optimal_parameter(lm_articles,lm_c)
+mu = mlm_optimal_parameter_tf(lm_articles,lm_c)
 
 print("Optimal : ",mu)
 
