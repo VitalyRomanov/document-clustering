@@ -12,6 +12,8 @@ def merge_articles(art):
   c += v['body'] + "\n"
  return c
 
+# comment
+
 current_folder = os.getcwd()
 lm_folder = current_folder + "/" + "models"
 
