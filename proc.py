@@ -31,7 +31,7 @@ for a_id,content in articles.items():
 #  pickle.dump(lm_articles,lm_art)
 
 print("Calculating optimal parameter")
-mu = mlm_optimal_parameter_tf(lm_articles,lm_c)
+mu = mlm_optimal_parameter(lm_articles,lm_c)
 
 print("Optimal : ",mu)
 
