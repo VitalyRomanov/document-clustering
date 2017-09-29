@@ -1,8 +1,7 @@
 from numpy import log
 
-def kld(model1,model2):
-    vocabulary = model1.lm.keys()
-    div = 0
-    for v in vocabulary:
-        div += model1.getProbSm(v)*(log(model1.getProbSm(v))-log(model2.getProbSm(v)))
+def kld(lm_1,lm_2):
+    div = 0.
+    for v in lm_1.getVoc():
+        div += lm_1.getProb(v)*(log(lm_1.getProb(v))-log(lm_2.getProb(v)))
     return div

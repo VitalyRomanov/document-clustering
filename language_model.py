@@ -5,9 +5,6 @@ from pymystem3 import Mystem
 import numpy as np
 import tensorflow as tf
 
-def multimomial_lm(doc):
-
-    return lm
 
 class MLM:
     def __init__(self,doc):
@@ -17,7 +14,10 @@ class MLM:
         self.tc = self.total_count
 
     def getProb(self,token):
-        return self.lm[token]/self.total_count+1e-300
+        if self.tc != 0:
+            return self.lm[token]/self.total_count+1e-300
+        else:
+            return 1e-300
 
     def getCount(self,token):
         return self.lm[token]
@@ -52,47 +52,63 @@ class JMLM:
     def getCount(self,token):
         raise NotImplemented
 
+class DMLM:
+    def __init__(self,d_lm,r_lm,mu):
+        self.lm = d_lm
+        self.r_lm = r_lm
+        self.mu = mu
+
+    def getProb(self,token):
+        return (self.lm.getCount(token) + self.mu * self.lm.getProb(token))/ \
+                (self.lm.tc + self.mu)
+
+    def getCount(self,token):
+        raise NotImplemented
+
+    def getVoc(self):
+        return self.lm.lm.keys()
+
 def mlm_optimal_parameter(lm_docs,lm_c):
     print("Words in vocabulary : ",len(lm_c.lm))
-    mu = .99
+    mu = 1200.
 
-    # v_size = len(lm_docs)
-    # d_is = np.zeros([v_size,1], dtype=np.float32)
-    # # p_w_cs = np.zeros([v_size,1], dtype=np.float32)
-    # c_w_ds = np.zeros([v_size,1], dtype=np.float32)
-    #
+    v_size = len(lm_docs)
+    d_is = np.zeros([v_size,1], dtype=np.float32)
+    # p_w_cs = np.zeros([v_size,1], dtype=np.float32)
+    c_w_ds = np.zeros([v_size,1], dtype=np.float32)
+
+    for i in range(1000):
+        g_mu = 0.; g_mu_d = 0.
+        for w_i,w in enumerate(lm_c.lm.keys()):
+            p_w_cs = lm_c.getProb(w); pos = 0
+            for lm_doc in lm_docs.values():
+                c_w_da = lm_doc.lm[w]; d_ia = lm_doc.tc
+                d_is[pos,0] = d_ia;# p_w_cs[pos,1] = p_w_c;
+                c_w_ds[pos,0] = c_w_da
+                pos += 1
+            g_mu += np.sum((c_w_ds * ((d_is - 1) * p_w_cs - c_w_ds + 1)) / (( d_is - 1 + mu ) * ( c_w_ds - 1 + mu * p_w_cs)))
+            g_mu_d += np.sum(- (c_w_ds * ( (d_is - 1) * p_w_cs - c_w_ds + 1)**2) / ((d_is - 1 + mu)**2 * (c_w_ds - 1 + mu * p_w_cs)**2))
+            # print("\r %d/%d   "%(w_i,len(lm_c.lm)), end='')
+        # print("")
+        mu = mu - g_mu / g_mu_d
+        print("Iteration %d : %f"%(i,mu))
     # for i in range(1000):
     #     g_mu = 0.; g_mu_d = 0.
     #     for w_i,w in enumerate(lm_c.lm.keys()):
-    #         p_w_cs = lm_c.getProb(w); pos = 0
+    #         p_w_c = lm_c.getProb(w)
     #         for lm_doc in lm_docs.values():
-    #             c_w_da = lm_doc.lm[w]; d_ia = lm_doc.tc
-    #             d_is[pos,0] = d_ia;# p_w_cs[pos,1] = p_w_c;
-    #             c_w_ds[pos,0] = c_w_da
-    #             pos += 1
-    #         g_mu += np.sum((c_w_ds * ((d_is - 1) * p_w_cs - c_w_ds + 1)) / (( d_is - 1 + mu ) * ( c_w_ds - 1 + mu * p_w_cs)))
-    #         g_mu_d += np.sum(- (c_w_ds * ( (d_is - 1) * p_w_cs - c_w_ds + 1)**2) / ((d_is - 1 + mu)**2 * (c_w_ds - 1 + mu * p_w_cs)**2))
+    #             c_w_d = lm_doc.lm[w]
+    #             d_i = lm_doc.tc
+    #             # print((( d_i - 1 + mu ) * ( c_w_d - 1 + mu * p_w_c)))
+    #             # print(d_i," ", mu," ", c_w_d," ", p_w_c)
+    #             g_mu += (c_w_d * ((d_i - 1) * p_w_c - c_w_d + 1)) / \
+    #                     (( d_i - 1 + mu ) * ( c_w_d - 1 + mu * p_w_c))
+    #             g_mu_d += - (c_w_d * ( (d_i - 1) * p_w_c - c_w_d + 1)**2) / \
+    #                         ((d_i - 1 + mu)**2 * (c_w_d - 1 + mu * p_w_c)**2)
     #         print("\r %d/%d   "%(w_i,len(lm_c.lm)), end='')
     #     print("")
     #     mu = mu - g_mu / g_mu_d
     #     print("Iteration %d : %f"%(i,mu))
-    for i in range(1000):
-        g_mu = 0.; g_mu_d = 0.
-        for w_i,w in enumerate(lm_c.lm.keys()):
-            p_w_c = lm_c.getProb(w)
-            for lm_doc in lm_docs.values():
-                c_w_d = lm_doc.lm[w]
-                d_i = lm_doc.tc
-                # print((( d_i - 1 + mu ) * ( c_w_d - 1 + mu * p_w_c)))
-                # print(d_i," ", mu," ", c_w_d," ", p_w_c)
-                g_mu += (c_w_d * ((d_i - 1) * p_w_c - c_w_d + 1)) / \
-                        (( d_i - 1 + mu ) * ( c_w_d - 1 + mu * p_w_c))
-                g_mu_d += - (c_w_d * ( (d_i - 1) * p_w_c - c_w_d + 1)**2) / \
-                            ((d_i - 1 + mu)**2 * (c_w_d - 1 + mu * p_w_c)**2)
-            print("\r %d/%d   "%(w_i,len(lm_c.lm)), end='')
-        print("")
-        mu = mu - g_mu / g_mu_d
-        print("Iteration %d : %f"%(i,mu))
 
     return mu
 
