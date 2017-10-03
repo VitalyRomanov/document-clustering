@@ -5,7 +5,7 @@ from pymystem3 import Mystem
 import numpy as np
 import tensorflow as tf
 import sys
-import scipy
+from scipy.sparse import dok_matrix,csr_matrix,csc_matrix,lil_matrix
 
 
 '''
@@ -18,28 +18,56 @@ reference : https://nlp.stanford.edu/~wcmac/papers/20050421-smoothing-tutorial.p
 
 LOW_VALUE = sys.float_info.min
 
+def find_in_voc(voc,tokens):
+    return [voc.index(token) for token in tokens]
+
+class Vocabulary:
+    def __init__(self,text):
+        self.tokens = list(set(get_document_words(text)))
+        self.index = dict(zip(self.tokens,range(len(self.tokens))))
+        self.size = len(self.tokens)
+
+    def find(self,tokens):
+        return [self.index[token] for token in tokens]
+
 class MLM:
     '''
     Classical language model
     Counts number of word occurences in a diven document
     doc : document text used for generating language model
     '''
-    def __init__(self,doc):
+    def __init__(self,doc,voc):
+        self.voc = voc
         words = get_document_words(doc)
-        self.lm = Counter(words)
-        self.total_count = sum(self.lm.values())
-        self.tc = self.total_count
+        wc = Counter(words)
+        self.tc = sum(wc.values())
+        col = np.array(voc.find(wc.keys()))
+        row = np.zeros(col.shape)
+        val = np.array(list(wc.values()))
+        self.wc = csr_matrix((val,(row,col)),shape=(1,voc.size))
+        if self.tc!=0:
+            self.prob = csr_matrix((val/self.tc,(row,col)),shape=(1,voc.size),dtype=np.float32)
+        else:
+            self.prob = csr_matrix((1,voc.size),dtype=np.float32)
+
+
 
     def getProb(self,token):
+        token_id = self.voc.find([token])[0]
         # returns probability of a token
         if self.tc != 0:
-            return self.lm[token]/self.total_count+LOW_VALUE
+            return self.wc[0,token_id]/self.tc+LOW_VALUE
         else:
             # in case the document is empty
             return LOW_VALUE
 
     def getCount(self,token):
-        return self.lm[token]
+        token_id = self.voc.find([token])[0]
+        return self.wc[0,token_id]
+
+    def getVoc(self):
+        # return self.lm.keys()
+        return self.wc.nonzero()
 
     def store(self,name):
         # write the LM on disk
@@ -94,40 +122,49 @@ class DMLM:
         return self.d_lm.lm.keys()
 
 
-
 def dlm_optimal_parameter(lm_docs,lm_c):
     '''
     Find the optimal parameter for language model with Dirichlet smoothing
+    Reference : Two-Stage Language Models for Information Retrieval by
+                ChengXiang Zhai and John Lafferty
     lm_docs : dictionaty of language models with doc_id as key
     lm_c : language model of a colection
     '''
     mu = 1200.
 
     d_size = len(lm_docs)   # number of documents
-    v_size = len(lm_c)      # vocabulary size
+    v_size = lm_c.voc.size      # vocabulary size
+    c_w_ds = lil_matrix((d_size,v_size),dtype=np.float32) # doc. word. freq. mat.
+    p_w_cs = lm_c.prob # collection prob
+    d_is = np.zeros([d_size,1], dtype=np.float32) # doc length
+    for lm_id,lm_d in enumerate(lm_docs.values()):
+        print("\r%d/%d"%(lm_id,len(lm_docs)),end='')
+        c_w_ds[lm_id,:] = lm_d.wc
+        d_is[lm_id,0] = lm_d.tc
+    print("")
+    c_w_ds = csc_matrix(c_w_ds)
 
-    d_is = np.zeros([d_size,1], dtype=np.float32) # document sizes (in tokens)
-    c_w_ds = scipy.dok_matrix((d_size,v_size), dtype=np.float32)   # token count matrix
-    p_w_cs = np.zeros([v_size,0], dtype=np.float32)
 
-    for w_i,w in enumerate(lm_c.getVoc()):
-        p_w_cs[w_i,0] = lm_c.getProb(w);
-        for lm_i,lm_doc in enumerate(lm_docs.values()):
-            d_is[lm_i,0] = lm_doc.tc
-            c_w_ds[lm_i,w_i] = lm_doc.getCount(w)
+    pickle.dump(c_w_ds,open("doc_freq_matr","wb"))
+    pickle.dump(d_is,open("doc_len","wb"))
+    pickle.dump(p_w_cs,open("ref_prob","wb"))
 
+    g_mu_w = lambda w_id,mu: np.sum((c_w_ds[:,w_id] * ((d_is - 1) * p_w_cs[0,w_id] - c_w_ds[:,w_id] + 1)) / \
+                                (( d_is - 1 + mu ) * ( c_w_ds[:,w_id] - 1 + mu * p_w_cs[0,w_id])))
 
+    g_d_mu_w = lambda w_id,mu: np.sum(- (c_w_ds[:,w_id] * ( (d_is - 1) * p_w_cs[0,w_id] - c_w_ds[:,w_id] + 1)**2) / \
+                                    ((d_is - 1 + mu)**2 * (c_w_ds[:,w_id] - 1 + mu * p_w_cs[0,w_id])**2))
 
     for i in range(1000):
 
-        g_mu_w = lambda w_id: np.sum((c_w_ds[:,w_id] * ((d_is - 1) * p_w_cs[w_id,0] - c_w_ds[:,w_id] + 1)) / \
-                                    (( d_is - 1 + mu ) * ( c_w_ds[:,w_id] - 1 + mu * p_w_cs[w_id,0])))
+        # g_mu = sum([g_mu_w(w_id,mu) for w_id in range(v_size)])
+        # g_d_mu = sum([g_d_mu_w(w_id,mu) for w_id in range(v_size)])
 
-        g_d_mu_w = lambda w_id: np.sum(- (c_w_ds[:,w_id] * ( (d_is - 1) * p_w_cs[w_id,0] - c_w_ds[:,w_id] + 1)**2) / \
-                                        ((d_is - 1 + mu)**2 * (c_w_ds[:,w_id] - 1 + mu * p_w_cs[w_id,0])**2))
-
-        g_mu = sum(map(g_mu_w,range(len(lm_c.getVoc()))))
-        g_d_mu = sum(map(g_d_mu_w,range(len(lm_c.getVoc()))))
+        g_mu = 0.;g_d_mu = 0.
+        for w_id in range(v_size):
+            g_mu += g_mu_w(w_id,mu)
+            g_d_mu += g_d_mu_w(w_id,mu)
+            print(g_mu,g_d_mu)
 
         mu = mu - g_mu / g_mu_d
         print("Iteration %d : %f"%(i,mu))
