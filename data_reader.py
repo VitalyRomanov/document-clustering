@@ -1,8 +1,25 @@
-import MySQLdb
+# import MySQLdb
 import sys
+from getpass import getpass
+import os
+import pickle
+
+
 
 def get_data():
- db = MySQLdb.connect(user="root",passwd="d74paj2c",db="articles_db",charset='utf8')
+ '''
+ Provides the dictionary of articles
+ Dictionary key : id of the article as it is stored in the DB
+ The article content is stored as a dictionary. The content is
+     title       : the title of the article
+     body        : the body of the article
+     timestamp   : the date of publication
+ '''
+ passw = getpass(prompt="Password for db: ")
+ db = MySQLdb.connect(user      =   "root",
+                      passwd    =   passw,
+                      db        =   "articles_db",
+                      charset   =   'utf8')
  c = db.cursor()
 
  articles = {}
@@ -15,14 +32,16 @@ def get_data():
   a_id = result[0]
   a_title = result[1]
   a_body = result[2]
-  articles[id_counter] = {'title':a_title,'body':a_body}
+  articles[id_counter] = {'title':a_title,'body':a_body,'timestamp':0}
   result = c.fetchone()
  return articles
 
-# counter = 0
-# with open(os.getcwd()+"/"+"samples.txt","w") as of:
-#  for a_id,content in articles.items():
-#   counter += 1
-#   of.write("%s\n%s\n\n\n"%(content['title'],content['body']))
-#   print(get_document_words(content['body']))
-#   if counter>2: break
+
+def get_all_articles():
+    if os.path.isfile("articles.dat"):
+        print("Loading articles from local dump")
+        articles = pickle.load(open("articles.dat","rb"))
+    else:
+        print("Loading articles from db")
+        articles = get_data()
+        pickle.dump(open("articles.dat","wb"),articles)
