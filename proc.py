@@ -24,6 +24,7 @@ current_folder = os.getcwd()
 lm_folder = current_folder + "/" + "models"
 
 articles = get_data()
+pickle.dump(articles,open("articles.dat","wb"))
 
 print("Collection LM")
 voc = Vocabulary(merge_articles(articles))
