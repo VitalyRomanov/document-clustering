@@ -18,8 +18,8 @@ reference : https://nlp.stanford.edu/~wcmac/papers/20050421-smoothing-tutorial.p
 
 LOW_VALUE = sys.float_info.min
 
-def find_in_voc(voc,tokens):
-    return [voc.index(token) for token in tokens]
+# def find_in_voc(voc,tokens):
+#     return [voc.index(token) for token in tokens]
 
 class Vocabulary:
     def __init__(self,text):
@@ -41,14 +41,14 @@ class MLM:
         words = get_document_words(doc)
         wc = Counter(words)
         self.tc = sum(wc.values())
-        col = np.array(voc.find(wc.keys()))
-        row = np.zeros(col.shape)
+        row = np.array(voc.find(wc.keys()))
+        col = np.zeros(row.shape)
         val = np.array(list(wc.values()))
-        self.wc = csr_matrix((val,(row,col)),shape=(1,voc.size))
+        self.wc = csc_matrix((val,(row,col)),shape=(voc.size,1))
         if self.tc!=0:
-            self.prob = csr_matrix((val/self.tc,(row,col)),shape=(1,voc.size),dtype=np.float32)
+            self.prob = csc_matrix((val/self.tc,(row,col)),shape=(voc.size,1),dtype=np.float32)
         else:
-            self.prob = csr_matrix((1,voc.size),dtype=np.float32)
+            self.prob = csc_matrix((voc.size,1),dtype=np.float32)
 
 
 
@@ -56,17 +56,16 @@ class MLM:
         token_id = self.voc.find([token])[0]
         # returns probability of a token
         if self.tc != 0:
-            return self.wc[0,token_id]/self.tc+LOW_VALUE
+            return self.wc[token_id,0]/self.tc+LOW_VALUE
         else:
             # in case the document is empty
             return LOW_VALUE
 
     def getCount(self,token):
         token_id = self.voc.find([token])[0]
-        return self.wc[0,token_id]
+        return self.wc[token_id,0]
 
     def getVoc(self):
-        # return self.lm.keys()
         return self.wc.nonzero()
 
     def store(self,name):

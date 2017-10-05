@@ -1,4 +1,4 @@
-# import MySQLdb
+import MySQLdb
 import sys
 from getpass import getpass
 import os
@@ -25,23 +25,26 @@ def get_data():
  articles = {}
 
  id_counter = 0
- c.execute("""SELECT id,title,article FROM external_articles""")
+ c.execute("""SELECT id,title,time,article FROM external_articles""")
  result = c.fetchone()
  while result is not None:
   id_counter += 1
   a_id = result[0]
   a_title = result[1]
-  a_body = result[2]
-  articles[id_counter] = {'title':a_title,'body':a_body,'timestamp':0}
+  a_time = result[2]
+  a_body = result[3]
+  articles[id_counter] = {'title':a_title,'body':a_body,'time':a_time}
   result = c.fetchone()
  return articles
 
 
 def get_all_articles():
-    if os.path.isfile("articles.dat"):
+    articles_path = "./resources/articles.dat"
+    if os.path.isfile(articles_path):
         print("Loading articles from local dump")
-        articles = pickle.load(open("articles.dat","rb"))
+        articles = pickle.load(open(articles_path,"rb"))
     else:
         print("Loading articles from db")
         articles = get_data()
-        pickle.dump(open("articles.dat","wb"),articles)
+        pickle.dump(articles,open(articles_path,"wb"))
+    return articles
