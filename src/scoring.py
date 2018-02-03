@@ -24,37 +24,45 @@ class BM25:
         self.avgln = np.mean(dm.get_doc_lens())
         self.D = dm.n_docs
 
+    def rank(self, query, score_items=[]):
 
-    def rank(self,query,score_items=[]):
         # sample documents if available
-        if score_items==[]:
+        if not score_items:
             wdp = self._dm.wdp
             score_items = np.array(range(self._dm.get_n_docs()))
         else:
             wdp = self._dm.wdp[score_items,:]
+
         # vectorize query
         vq = self._dm.vectorize_query(query).todense()
+
         # sample words from query
         # second dimension must be len(nzwp)
         nzwp = get_nonzero_words(vq)
-        # print(vq.shape,self.IDF.shape,wdp.shape)
-        vq = filter_words(vq,nzwp)
-        rlm = filter_words(self._dm.rlm,nzwp)
-        idf = filter_words(self.IDF,nzwp)
-        wdp = filter_words(wdp,nzwp)
+
+        # following two can be used for a LM retrieval
+        # vq = filter_words(vq, nzwp)
+        # rlm = filter_words(self._dm.rlm, nzwp)
+
+        # filter non-zero words
+        idf = filter_words(self.IDF, nzwp)
+        wdp = filter_words(wdp, nzwp)
+
         # filter docs with no overlapping words
-        nz_wdm,nz_line_ref = filter_empty_lines(wdp,score_items)
-        # apply smoothing
+        nz_wdm, nz_line_ref = filter_empty_lines(wdp, score_items)
+
+        # apply smoothing using vq and rlm
         dlm = nz_wdm
+
         # Calculate cost
-        cost = np.zeros((len(nz_line_ref),))
+        # cost = np.zeros((len(nz_line_ref),))
         k = self.k; b = self.b; D = self.D; avgln = self.avgln
-        cost = (dlm*(k+1)*idf/(dlm + k*(1-b+b*D/avgln))).sum(1)
+        cost = (dlm * (k + 1) * idf / (dlm + k * (1 - b + b * D / avgln))).sum(1)
         ind = np.array(perm_sort(cost))
 
         ids = self._dm.get_doc_ids()[nz_line_ref]
 
-        return cost[ind],ids[ind]
+        return cost[ind], ids[ind]
 
 
 def get_nonzero_words(bow):
@@ -63,17 +71,20 @@ def get_nonzero_words(bow):
     """
     return bow.nonzero()[1]
 
-def filter_words(wdm,word_mask):
+
+def filter_words(wdm, word_mask):
     """
     Select columns of Wrd-Document Matrix that are specified by word_mask
     """
-    return wdm[:,word_mask]
+    return wdm[:, word_mask]
 
-def filter_empty_lines(wdm,line_ref):
+
+def filter_empty_lines(wdm, line_ref):
     nz_docs = wdm.sum(1).nonzero()[0]
-    nz_wdm = wdm[nz_docs,:].toarray()
+    nz_wdm = wdm[nz_docs, :].toarray()
     nz_line_ref = line_ref[nz_docs]
-    return nz_wdm,nz_line_ref
+    return nz_wdm, nz_line_ref
+
 
 def perm_sort(x):
-    return sorted(range(len(x)),key=lambda k:x[k],reverse=True)
+    return sorted(range(len(x)), key=lambda k: x[k], reverse=True)

@@ -2,11 +2,9 @@ from language_model import Vocabulary
 import numpy as np
 from tokenization import RuTok
 from scipy.sparse import coo_matrix,dok_matrix,csr_matrix,dia_matrix
-# from kullback_lebler import kld_vect
-# import tensorflow as tf
 import itertools
 import sklearn
-
+import joblib as p
 
 
 class WDM:
@@ -14,24 +12,24 @@ class WDM:
     Document-Term Matrix
     interfaces:
     add_doc(doc): doc is a string or list of strings
-    construct_rlm() : returns corpus language model of type MLM
-    construct_wdp() : returns document-term probabilities matrix
+    construct_rlm() : creates corpus language model of type MLM
+    construct_wdp() : creates document-term probabilities matrix
     __add_to_wdm()
     _tokenize_documents()
     """
-    _voc = None # vocabulary
-    _wdm = None # word document matrix
-    _ste = None # russian stemmer
+    _voc = None  # vocabulary
+    _wdm = None  # word document matrix
+    _ste = None  # russian stemmer
     _doc_id = None
 
-    rlm = None # reference (corpus) language model
-    wdp = None # document-term probabilities
+    rlm = None  # reference (corpus) language model
+    wdp = None  # document-term probabilities
     idf = None
 
     n_docs = 0
     voc_size = 0
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         Create empty vocabulary, empty Document-Term Matrix, and initialize
         russian stemmer
@@ -39,7 +37,7 @@ class WDM:
         self._voc = Vocabulary()
         # changing the sparsity of dak_matrix is more efficient
         # dims of DTM are (n_docs,voc_size)
-        self._wdm = dok_matrix(np.zeros((0,self._voc.size)))
+        self._wdm = dok_matrix(np.zeros((0, self._voc.size)))
         self._wdm = self._wdm.tocsr()
         self._ste = RuTok()
         self._doc_id = []
@@ -53,7 +51,7 @@ class WDM:
     def get_doc_ids(self):
         return np.array(self._doc_id)
 
-    def add_docs(self,docs_d):
+    def add_docs(self, docs_d):
         """
         Adds document into the Document-Term Matrix (DTM)
         docs : string or list of strings that represent document content
@@ -61,55 +59,60 @@ class WDM:
         docs_ids = docs_d['ids']
         docs = docs_d['docs']
 
-        if isinstance(docs, str): docs = [docs]
+        if isinstance(docs, str):
+            docs = [docs]
         else:
-            print("Adding %d docs to DTM"%len(docs))
-            if len(docs)==0 : return
+            print("Adding %d docs to DTM" % len(docs))
+            if len(docs) == 0:
+                return
 
         self._doc_id.extend(docs_ids)
+
         # perform lemmatization of russian words
         docs_tok = self._tokenize_documents(docs)
+
         # add new words to vocabulary
         all_new_tokens = list(itertools.chain.from_iterable(docs_tok))
-        v_s_old,v_s_new = self._voc.expand(all_new_tokens,from_tokens=True)
+        v_s_old, v_s_new = self._voc.expand(all_new_tokens, from_tokens=True)
 
         wdm_temp = self._wdm.todok()
         n_docs = len(docs)
         old_shape = wdm_temp.shape
+
         # new shape of DTM is determined by the number of new articles and
         # the number of new words
-        new_shape = (old_shape[0]+n_docs,old_shape[1]+v_s_new-v_s_old)
+        new_shape = (old_shape[0]+n_docs, old_shape[1]+v_s_new-v_s_old)
         wdm_temp.resize(new_shape)
+
         for i in range(n_docs):
-            self.__add_to_wdm(old_shape[0]+i,docs_tok[i],wdm_temp)
-            print("\rAdded %d out of %d"%(i,n_docs),end="")
-        print("\r",end="")
+            self.__add_to_wdm(old_shape[0]+i, docs_tok[i], wdm_temp)
+            print("\rAdded %d out of %d" % (i, n_docs), end="")
+        print("\r", end="")
 
         self._wdm = wdm_temp.tocsr()
-        self.wdp = self.construct_wdp()
-        self.rlm = self.construct_rlm()
+
+        self.construct_wdp()
+        self.construct_rlm()
         self.construct_idf()
 
-
-    def __add_to_wdm(self,doc_id,doc_tokens,wdm):
+    def __add_to_wdm(self, doc_id, doc_tokens, wdm):
         """
         add doc to DTM
-        doc_id : the row where the socument is added
+        doc_id : the row where the document is added
         doc : document tokens
         wdm : DTM
         """
         t_loc = self._voc.find(doc_tokens)
         for t_l in t_loc:
-            wdm[doc_id,t_l] += 1
+            wdm[doc_id, t_l] += 1
 
     def construct_rlm(self):
         """
         Reference Language Model is overall probabilities for
         each word in the corpus
         """
-        rlm = self._wdm.sum(0) # sum word counts over all documents
-        rlm = sklearn.preprocessing.normalize(rlm,axis=1) # /=np.sum(rlm) # normalize to overall word count
-        return rlm
+        rlm = self._wdm.sum(0)  # sum word counts over all documents
+        self.rlm = sklearn.preprocessing.normalize(rlm, axis=1)  # /=np.sum(rlm) # normalize to overall word count
 
     def construct_wdp(self):
         """
@@ -124,26 +127,26 @@ class WDM:
         # wdp = self._wdm.copy()
         # wdp = idcs_m * wdp
         # return wdp
-        return sklearn.preprocessing.normalize(self._wdm,axis=1)
+        self.wdp = sklearn.preprocessing.normalize(self._wdm, axis=1)
 
     def construct_idf(self):
         """
         Calculate IDF count for words in vocabulary
         """
 
-        self.idf = (self._wdm>0).toarray().sum(0,keepdims=True)
+        self.idf = (self._wdm > 0).toarray().sum(0, keepdims=True)
         # print(self._voc.get_word([0]),self.idf[0,0])
         # return
         # return np.asarray((self._wdm>0).sum(0)).reshape(-1)
 
-    def _tokenize_documents(self,docs):
+    def _tokenize_documents(self, docs):
         """
         docs : the list of strings that represent documents
         """
         doc_st = []
-        for d_id,doc in enumerate(docs):
+        for d_id, doc in enumerate(docs):
             doc_st.append(self._ste.tokenize(doc))
-            print("\rTokenized %d/%d"%(d_id,len(docs)),end="")
+            print("\rTokenized %d/%d" % (d_id, len(docs)), end="")
         return doc_st
 
     # def query_score(self,query,id2):
@@ -196,18 +199,18 @@ class WDM:
     #     self.tf_kld = tf.reduce_sum(tf.multiply(doc1_lm,(tf.log(doc1_lm)-tf.log(doc2_lm))))
     #     self.sess = tf.Session()
 
-    def vectorize_query(self,query):
+    def vectorize_query(self, query):
         doc_tokens = self._tokenize_documents([query])[0]
         print("\r                   ")
         # doc_tokens = docs_tok.split(" ")
         t_loc = self._voc.find(doc_tokens)
-        query_vect = dok_matrix(np.zeros((1,self._voc.size)))
+        query_vect = dok_matrix(np.zeros((1, self._voc.size)))
         for t in t_loc:
-            query_vect[0,t] += 1
+            query_vect[0, t] += 1
         return query_vect
 
     def get_doc_lens(self):
-        return np.asarray((self._wdm).sum(1)).reshape(-1)
+        return np.asarray(self._wdm.sum(1)).reshape(-1)
 
     def get_n_docs(self):
         return self._wdm.shape[0]
@@ -215,11 +218,14 @@ class WDM:
     def get_voc_size(self):
         return self._wdm.shape[1]
 
+    def load(path):
+        return p.load(open(path, "rb"))
+
+    def save(self,path):
+        p.dump(self, open(path, "wb"), protocol=0)
 
 
-
-
-# def sample_raw_doc_lm(doc_bow,w_ids):
+# def sample_raw_doc_lm(doc_bow, w_ids):
 #     """
 #     doc_bow : sparse array with dims [1,voc_size]
 #     w_ids : array of positions of words of interest
